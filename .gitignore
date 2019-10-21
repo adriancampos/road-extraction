@@ -7,3 +7,6 @@ __pycache__
 .weights
 .DS_Store
 ._.DS_Store
+.runs/
+datasets/deepglobe/
+datasets/maroads/

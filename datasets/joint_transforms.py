@@ -115,6 +115,30 @@ class JointRandomHorizontalFlip(object):
             return [img.transpose(Image.FLIP_LEFT_RIGHT) for img in imgs]
         return imgs
 
+    
+class JointRandomVerticalFlip(object):
+    """Randomly vertically flips the given list of PIL.Image with a probability of 0.5
+    """
+
+    def __call__(self, imgs):
+        if random.random() < 0.5:
+            return [img.transpose(Image.FLIP_TOP_BOTTOM) for img in imgs]
+        return imgs
+    
+        
+class JointRandomRotate(object):
+    """Randomly rotates the given list of PIL.Image by degree_step degrees with a probability of 0.5
+    """
+
+# TODO:    """Randomly rotates the given list of PIL.Image by multiples of degree_step
+#    """
+
+    def __call__(self, imgs, degree_step=90):
+        
+        if random.random() < 0.5:
+            return [img.rotate(degree_step) for img in imgs]
+        return imgs
+
 
 class JointRandomSizedCrop(object):
     """Random crop the given list of PIL.Image to a random size of (0.08 to 1.0) of the original size

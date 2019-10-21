@@ -13,20 +13,21 @@ Car = [64,0,128]
 Pedestrian = [64,64,0]
 Bicyclist = [0,128,192]
 Unlabelled = [0,0,0]
+Road = [255,255,255]
 
 DSET_MEAN = [0.41189489566336, 0.4251328133025, 0.4326707089857]
 DSET_STD = [0.27413549931506, 0.28506257482912, 0.28284674400252]
 
-label_colours = np.array([Sky, Building, Pole, Road, Pavement,
-      Tree, SignSymbol, Fence, Car, Pedestrian, Bicyclist, Unlabelled])
-
+# label_colours = np.array([Sky, Building, Pole, Road, Pavement,
+#       Tree, SignSymbol, Fence, Car, Pedestrian, Bicyclist, Unlabelled])
+label_colours = np.array([Unlabelled, Road])
 
 def view_annotated(tensor, plot=True):
     temp = tensor.numpy()
     r = temp.copy()
     g = temp.copy()
     b = temp.copy()
-    for l in range(0,11):
+    for l in range(0,len(label_colours)):
         r[temp==l]=label_colours[l,0]
         g[temp==l]=label_colours[l,1]
         b[temp==l]=label_colours[l,2]

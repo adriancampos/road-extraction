@@ -7,13 +7,22 @@ from .layers import *
 class FCDenseNet(nn.Module):
     def __init__(self, in_channels=3, down_blocks=(5,5,5,5,5),
                  up_blocks=(5,5,5,5,5), bottleneck_layers=5,
-                 growth_rate=16, out_chans_first_conv=48, n_classes=12):
+                 growth_rate=16, out_chans_first_conv=48, n_classes=12,
+                 pre_conv=False, stride_pre_conv=1
+                ):
         super().__init__()
         self.down_blocks = down_blocks
         self.up_blocks = up_blocks
         cur_channels_count = 0
         skip_connection_channel_counts = []
 
+        
+        ## Pre- Convolution ##
+        if pre_conv:
+            self.add_module('preconv', nn.Conv2d(in_channels=in_channels,
+                      out_channels=out_chans_first_conv, kernel_size=7,
+                      stride=stride_pre_conv, padding=1, bias=True))
+        
         ## First Convolution ##
 
         self.add_module('firstconv', nn.Conv2d(in_channels=in_channels,
@@ -75,7 +84,8 @@ class FCDenseNet(nn.Module):
         self.finalConv = nn.Conv2d(in_channels=cur_channels_count,
                out_channels=n_classes, kernel_size=1, stride=1,
                    padding=0, bias=True)
-        self.softmax = nn.LogSoftmax(dim=1)
+#         self.softmax = nn.LogSoftmax(dim=1)
+        self.sigmoid = nn.Sigmoid()
 
     def forward(self, x):
         out = self.firstconv(x)
@@ -93,10 +103,17 @@ class FCDenseNet(nn.Module):
             out = self.denseBlocksUp[i](out)
 
         out = self.finalConv(out)
-        out = self.softmax(out)
+        out = self.sigmoid(out)
         return out
 
 
+def FCDenseNetSmall(n_classes):
+    return FCDenseNet(
+        in_channels=3, down_blocks=(2,2,3,4),
+        up_blocks=(4,3,2,2), bottleneck_layers=4,
+        growth_rate=8, out_chans_first_conv=16, pre_conv=False, stride_pre_conv=2, n_classes=n_classes)
+# todo: my stride is the same as dlink but their first conv is 7x7
+    
 def FCDenseNet57(n_classes):
     return FCDenseNet(
         in_channels=3, down_blocks=(4, 4, 4, 4, 4),
