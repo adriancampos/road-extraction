@@ -21,7 +21,7 @@ WEIGHTS_PATH = '.weights/'
 THRESHOLD = 0.5
 
 
-def save_weights(model, epoch, loss, err):
+def save_weights(model, epoch, loss, err, WEIGHTS_PATH=WEIGHTS_PATH):
     weights_fname = 'weights-%d-%.3f-%.3f.pth' % (epoch, loss, err)
     weights_fpath = os.path.join(WEIGHTS_PATH, weights_fname)
     torch.save({
@@ -30,7 +30,7 @@ def save_weights(model, epoch, loss, err):
             'error': err,
             'state_dict': model.state_dict()
         }, weights_fpath)
-    shutil.copyfile(weights_fpath, WEIGHTS_PATH+'latest.th')
+    shutil.copyfile(weights_fpath, WEIGHTS_PATH/'latest.th')
 
 def load_weights(model, fpath):
     print("loading weights '{}'".format(fpath))
@@ -94,7 +94,7 @@ def jaccard(preds, targets):
     return float(intersection.sum())/float(union.sum())
 
 
-def train(model, trn_loader, optimizer, criterion, epoch, MAX_BATCH_PER_CARD=1, batch_size=16):
+def train(model, trn_loader, optimizer, criterion, epoch, MAX_BATCH_PER_CARD=1, batch_size=16,debug_max_size=None):
     model.train()
     trn_loss = 0
     trn_error = 0
@@ -109,17 +109,13 @@ def train(model, trn_loader, optimizer, criterion, epoch, MAX_BATCH_PER_CARD=1, 
     
     optimizer.zero_grad()
 
-    for i, (inputs, targets) in enumerate(trn_loader):         
+    for i, (inputs, targets) in enumerate(trn_loader):
+        if debug_max_size and i > debug_max_size:
+            break
+        
         if (len(trn_loader) - i + 1) < batch_size:
             # out of room for another batch
             break
-        
-        
-        
-#         print("idx",idx)
-#         print("data",data[0].shape,data[1].shape)
-#         img_utils.view_image(data[0][0])
-#         img_utils.view_image(data[1])
 
         inputs = Variable(inputs.cuda())
         targets = Variable(targets.cuda())
@@ -127,20 +123,11 @@ def train(model, trn_loader, optimizer, criterion, epoch, MAX_BATCH_PER_CARD=1, 
         targets = targets.unsqueeze(0)
 
         output = model(inputs)
-#         print("targets.shape",targets.shape)
-#         print("outputs.shape",output.shape)
 
-#         print("output.shape",output.shape)
-#         print("target.shape",targets.shape)
-
-#         print("output.max()",output.max())
-#         print("target.max()",targets.max())
         loss = criterion(output, targets)
         loss /= multiplier
         loss.backward()
         
-#         print(loss, batchloss)
-
         if not torch.isnan(loss):
             batchloss += loss.item()
         else:
@@ -157,23 +144,23 @@ def train(model, trn_loader, optimizer, criterion, epoch, MAX_BATCH_PER_CARD=1, 
             batchloss = 0            
 
 
-#         print(loss.item())
-#         trn_loss += loss.item()
         pred = get_predictions(output)
         trn_error += error(pred, targets.data.cpu())
 
-#     trn_loss /= len(trn_loader)
     trn_loss /= batchcount
     trn_error /= len(trn_loader)
     return trn_loss, trn_error
 
-def test(model, test_loader, criterion, epoch=1, use_tta=False):
+def test(model, test_loader, criterion, epoch=1, use_tta=False,debug_max_size=None):
     model.eval()
     test_loss = 0
     test_error = 0
     jacc = 0
     with torch.no_grad():
-        for data, target in test_loader:
+        for i,(data, target) in enumerate(test_loader):
+            if debug_max_size and i > debug_max_size:
+                break
+            
             data = Variable(data.cuda())
             target = Variable(target.cuda())
             target = target.unsqueeze(0)
@@ -182,16 +169,12 @@ def test(model, test_loader, criterion, epoch=1, use_tta=False):
                 output = tta_util.get_tta_output_rot(data, model)
             else:
                 output = model(data)
-    #         test_loss += criterion(output, target).data[0]
-
-#             print("targets.shape",target.shape)
-#             print("outputs.shape",output.shape)
 
             test_loss += criterion(output, target).item()
             pred = get_predictions(output)
             test_error += error(pred, target.data.cpu())
             jacc += jaccard(pred, target.data.cpu())
-    #         print(test_error)
+            
     test_loss /= len(test_loader)
     test_error /= len(test_loader)
     jacc /= len(test_loader)
@@ -234,19 +217,22 @@ def predict_validation(model, input_loader, n_batches=1):
             predictions.append([input,pred,path])
         return predictions
 
-def view_sample_predictions(model, loader, n, criterion=None):
+def view_sample_predictions(model, loader, n, criterion=None, idx=0):
     with torch.no_grad():
-        inputs, targets = next(iter(loader))
+        loader = iter(loader)
+        inputs, targets = next(loader)
+        
+        # skip ahead in the loader
+        for _ in range(idx):
+            inputs, targets = next(loader)
+
+        
         data = Variable(inputs.cuda())
         label = Variable(targets.cuda())
         output = model(data)
-    #     output = (output+8)*(255/8)
+
         pred = get_predictions(output)
-    #     print("target",label,label.shape)
-    #     print("output",output[0],output[0].shape)
-    #     print("max(output)",output[0].max())
-    #     print("min(output)",output[0].min())
-    #     print("predic",pred,pred.shape)
+
         batch_size = inputs.size(0)
         for i in range(min(n, batch_size)):
             img_utils.view_image(inputs[i])
@@ -254,25 +240,24 @@ def view_sample_predictions(model, loader, n, criterion=None):
             img_utils.view_annotated(pred[i])
 
         if criterion:
-            return criterion(output, label).item(), error(pred, label.data.cpu()), jaccard(pred, label.data.cpu())
+            return criterion(output, label.unsqueeze(0)).item(), error(pred, label.data.cpu()), jaccard(pred, label.data.cpu())
 
 
 def get_sample_predictions(model, loader, n, criterion=None, idx=None):
     with torch.no_grad():
         if idx:
             inputs, targets = loader.dataset[idx]
+            inputs = inputs.unsqueeze(dim=0)
+            targets = targets.unsqueeze(dim=0)
         else:
             inputs, targets = next(iter(loader))
+        
         data = Variable(inputs.cuda())
         label = Variable(targets.cuda()).unsqueeze(0)
         output = model(data)
         # TODO: I don't think I need to do get_predictions. Or modify it to just do a threshold. That's all. (Same for view_sample_predictions)
         pred = get_predictions(output)
         batch_size = inputs.size(0)
-    #     for i in range(min(n, batch_size)):
-    #         img_utils.view_image(inputs[i])
-    #         img_utils.view_annotated(targets[i])
-    #         img_utils.view_annotated(pred[i])
 
         if criterion:
             return inputs, targets, pred, criterion(output, label).item(), error(pred, label.data.cpu()), jaccard(pred, label.data.cpu())

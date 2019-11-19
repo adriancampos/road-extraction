@@ -131,9 +131,10 @@ class MARoads(data.Dataset):
             
 
     def __len__(self):
-#         return len(self.imgs)
+        return len(self.imgs)
+#         return 100
         # for debug
-        return 20
+#         return 20
 
 
     def download(self):
