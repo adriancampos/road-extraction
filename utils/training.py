@@ -32,14 +32,24 @@ def save_weights(model, epoch, loss, err, WEIGHTS_PATH=WEIGHTS_PATH):
         }, weights_fpath)
     shutil.copyfile(weights_fpath, WEIGHTS_PATH/'latest.th')
 
-def load_weights(model, fpath):
+def load_weights(model, fpath, map_location=None):
     print("loading weights '{}'".format(fpath))
-    weights = torch.load(fpath)
+    weights = torch.load(fpath, map_location=map_location)
     startEpoch = weights['startEpoch']
     model.load_state_dict(weights['state_dict'])
     print("loaded weights (lastEpoch {}, loss {}, error {})"
           .format(startEpoch-1, weights['loss'], weights['error']))
     return startEpoch
+
+
+def load_weights_fair(model, fpath, map_location=None):
+    print("loading weights '{}'".format(fpath))
+    weights = torch.load(fpath, map_location=map_location)
+    model.load_state_dict(weights)
+    print("loaded weights (lastEpoch {}, loss {}, error {})"
+          .format(-1, "?", "?"))
+    return -1
+
 
 def threshold(preds):
     assert THRESHOLD == 0.5
@@ -120,9 +130,13 @@ def train(model, trn_loader, optimizer, criterion, epoch, MAX_BATCH_PER_CARD=1, 
         inputs = Variable(inputs.cuda())
         targets = Variable(targets.cuda())
         
-        targets = targets.unsqueeze(0)
+        targets = targets.unsqueeze(1) # dim 0 is batch, 1 is color channels
 
         output = model(inputs)
+        
+#         print("output.shape ",output.shape)
+#         print("inputs.shape ",inputs.shape)
+#         print("targets.shape",targets.shape)
 
         loss = criterion(output, targets)
         loss /= multiplier
@@ -163,7 +177,7 @@ def test(model, test_loader, criterion, epoch=1, use_tta=False,debug_max_size=No
             
             data = Variable(data.cuda())
             target = Variable(target.cuda())
-            target = target.unsqueeze(0)
+            target = target.unsqueeze(1) # dim 0 is batch, 1 is color channels
 
             if use_tta:
                 output = tta_util.get_tta_output_rot(data, model)
@@ -174,10 +188,17 @@ def test(model, test_loader, criterion, epoch=1, use_tta=False,debug_max_size=No
             pred = get_predictions(output)
             test_error += error(pred, target.data.cpu())
             jacc += jaccard(pred, target.data.cpu())
+#             print("err",test_error)
+#             print("jac",jacc)
+    
+    if debug_max_size:
+        size = debug_max_size
+    else: 
+        size = len(test_loader)
             
-    test_loss /= len(test_loader)
-    test_error /= len(test_loader)
-    jacc /= len(test_loader)
+    test_loss /= size
+    test_error /= size
+    jacc /= size
     return test_loss, test_error, jacc
 
 def adjust_learning_rate(lr, decay, optimizer, cur_epoch, n_epochs):
@@ -240,7 +261,7 @@ def view_sample_predictions(model, loader, n, criterion=None, idx=0):
             img_utils.view_annotated(pred[i])
 
         if criterion:
-            return criterion(output, label.unsqueeze(0)).item(), error(pred, label.data.cpu()), jaccard(pred, label.data.cpu())
+            return criterion(output, label.unsqueeze(1)).item(), error(pred, label.data.cpu()), jaccard(pred, label.data.cpu())
 
 
 def get_sample_predictions(model, loader, n, criterion=None, idx=None):
@@ -253,7 +274,7 @@ def get_sample_predictions(model, loader, n, criterion=None, idx=None):
             inputs, targets = next(iter(loader))
         
         data = Variable(inputs.cuda())
-        label = Variable(targets.cuda()).unsqueeze(0)
+        label = Variable(targets.cuda()).unsqueeze(1)
         output = model(data)
         # TODO: I don't think I need to do get_predictions. Or modify it to just do a threshold. That's all. (Same for view_sample_predictions)
         pred = get_predictions(output)

@@ -13,4 +13,4 @@ class BCESSIM(nn.Module):
 
         bce = self.bce_loss(outputs, labels)
         ssim= self.ssim(outputs, labels)
-        return bce + (1 - ssim)
+        return .8*bce + .2*(1 - ssim)

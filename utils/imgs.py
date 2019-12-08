@@ -44,9 +44,9 @@ def view_annotated(tensor, plot=True):
 
 def decode_image(tensor):
     inp = tensor.numpy().transpose((1, 2, 0))
-    mean = np.array(DSET_MEAN)
-    std = np.array(DSET_STD)
-    inp = std * inp + mean
+#     mean = np.array(DSET_MEAN)
+#     std = np.array(DSET_STD)
+#     inp = std * inp + mean
     return inp
 
 def view_image(tensor):
